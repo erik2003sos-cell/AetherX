@@ -42,9 +42,7 @@ impl AetherXApp {
         match launch::run(exe, &[]) {
             Ok(()) => {
                 let name = exe.file_stem().and_then(|s| s.to_str()).unwrap_or("Game");
-                self.status = format!(
-                    "Started {name} — AetherX will launch PhyriadFG automatically when its backend is installed"
-                );
+                self.status = format!("Started {name} — native rendering; no frame-generation overlay");
             }
             Err(error) => self.status = format!("Could not start game: {error:#}"),
         }
@@ -88,25 +86,13 @@ impl eframe::App for AetherXApp {
                 });
 
             ui.separator();
-            ui.heading("Performance");
-            ui.label("1.5× target Frame Generation: 45 FPS at a 30 FPS source (PhyriadFG)");
-            #[cfg(windows)]
-            {
-                let backend_installed = std::env::current_exe()
-                    .ok()
-                    .and_then(|path| path.parent().map(|dir| dir.join("phyriad_fg.exe")))
-                    .is_some_and(|path| path.is_file());
-                ui.small(if backend_installed {
-                    "PhyriadFG backend: installed"
-                } else {
-                    "PhyriadFG backend: not installed — run tools\\setup-phyriadfg.ps1"
-                });
-            }
-            ui.small("AetherX uses PhyriadFG’s fractional output controller: 45 FPS target, approximately 1.5× at 30 source FPS. Actual output depends on source FPS and GPU capacity; the controller lowers the target if the GPU cannot sustain it.");
+            ui.heading("Performance roadmap");
+            ui.label("Native game rendering — frame generation removed");
+            ui.small("Current focus: measure real FPS and frame times, reduce CPU/GPU bottlenecks, improve graphics configuration, and verify audio stability.");
             ui.add_space(8.0);
             ui.label(&self.status);
             ui.add_space(4.0);
-            ui.small("AetherX launches native Windows games. Unsupported systems must fall back safely; no CPU/GPU can be promised support until tested.");
+            ui.small("AetherX launches native Windows games. Performance improvements are added only when they can be measured and tested on the target hardware.");
         });
     }
 }
