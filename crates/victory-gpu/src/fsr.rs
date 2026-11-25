@@ -1,7 +1,9 @@
 //! AMD FidelityFX Frame Generation SDK runtime discovery.
 //!
-//! SDK availability is distinct from activation. FSR FG still requires a
-//! D3D12 swapchain integration and per-frame rendering inputs.
+//! AMD ships the DX12 frame-generation provider as one signed DLL. The SDK's
+//! ffx_api_loader.h resolves the five API entry points from that module.
+//! Finding those entry points is only runtime availability; a game swapchain
+//! still needs to be wrapped and supplied with an interpolation dispatch.
 
 #[cfg(windows)]
 mod windows_runtime {
@@ -11,8 +13,7 @@ mod windows_runtime {
     use windows::Win32::System::LibraryLoader::{FreeLibrary, GetProcAddress, LoadLibraryW};
     use windows::core::{PCSTR, PCWSTR};
 
-    const LOADER_DLL: &str = "amd_fidelityfx_loader_dx12.dll";
-    const FRAMEGEN_DLL: &str = "amd_fidelityfx_framegeneration_dx12.dll";
+    const PROVIDER_DLL: &str = "amd_fidelityfx_framegeneration_dx12.dll";
     const REQUIRED_EXPORTS: [&[u8]; 5] = [
         b"ffxCreateContext\0",
         b"ffxDestroyContext\0",
@@ -23,8 +24,8 @@ mod windows_runtime {
 
     struct Module(windows::Win32::Foundation::HMODULE);
 
-    // Loaded Windows module handles are process-wide references. The runtime
-    // only queries immutable export addresses after loading.
+    // The module handle is immutable after LoadLibraryW; the cached runtime
+    // is process-wide and the SDK entry points are safe to resolve concurrently.
     unsafe impl Send for Module {}
     unsafe impl Sync for Module {}
 
@@ -36,8 +37,7 @@ mod windows_runtime {
     }
 
     pub struct FsrRuntime {
-        _loader: Module,
-        _framegen: Module,
+        _provider: Module,
         pub directory: PathBuf,
     }
 
@@ -48,31 +48,24 @@ mod windows_runtime {
             let directory = exe.parent()
                 .ok_or_else(|| "AetherX executable has no parent directory".to_owned())?
                 .to_path_buf();
-            let loader_path = directory.join(LOADER_DLL);
-            let framegen_path = directory.join(FRAMEGEN_DLL);
-
-            if !loader_path.is_file() {
-                return Err(format!("missing {LOADER_DLL} beside AetherX"));
-            }
-            if !framegen_path.is_file() {
-                return Err(format!("missing {FRAMEGEN_DLL} beside AetherX"));
+            let provider_path = directory.join(PROVIDER_DLL);
+            if !provider_path.is_file() {
+                return Err(format!("missing {PROVIDER_DLL} beside AetherX"));
             }
 
-            let loader = load_absolute(&loader_path)?;
-            let framegen = load_absolute(&framegen_path)?;
+            let provider = load_absolute(&provider_path)?;
             for export in REQUIRED_EXPORTS {
                 // SAFETY: export names are NUL-terminated static byte strings;
-                // the loaded module remains alive in the runtime.
-                let found = unsafe { GetProcAddress(loader.0, PCSTR(export.as_ptr())) };
+                // the loaded provider remains alive in FsrRuntime.
+                let found = unsafe { GetProcAddress(provider.0, PCSTR(export.as_ptr())) };
                 if found.is_none() {
                     return Err(format!(
-                        "FSR loader is missing export {}",
+                        "FSR provider is missing export {}",
                         String::from_utf8_lossy(&export[..export.len() - 1])
                     ));
                 }
             }
-
-            Ok(Self { _loader: loader, _framegen: framegen, directory })
+            Ok(Self { _provider: provider, directory })
         }
     }
 
@@ -92,11 +85,11 @@ pub fn status() -> &'static str {
     match RUNTIME.get_or_init(windows_runtime::FsrRuntime::load) {
         Ok(runtime) => {
             let _ = &runtime.directory;
-            "FSR SDK detected — render integration pending"
+            "FSR DX12 provider detected — swapchain/dispatch integration pending"
         }
         Err(reason) => {
             let _ = reason;
-            "FSR SDK not installed — using safe fallback"
+            "FSR DX12 provider not installed — safe fallback"
         }
     }
 }
