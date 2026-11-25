@@ -97,7 +97,6 @@ fn is_game_executable(path: &Path) -> bool {
         "sentinel",
         "support",
         "redist",
-        "redist\u{005c}x64",
         "commonredist",
     ];
     if path.components().any(|component| {
@@ -144,7 +143,6 @@ fn is_game_executable(path: &Path) -> bool {
         "vrcmd",
         "gaijin_downloader",
         "launcher",
-        "unitycrashhandler",
         "ue4prereqsetup",
         "easyanticheat_eos_setup",
         "easyanticheat_setup",
