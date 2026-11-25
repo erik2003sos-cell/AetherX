@@ -91,7 +91,17 @@ impl eframe::App for AetherXApp {
             ui.heading("Performance");
             ui.label("2× Frame Generation: PhyriadFG external backend");
             #[cfg(windows)]
-            ui.small(victory_gpu::fsr::status());
+            {
+                let backend_installed = std::env::current_exe()
+                    .ok()
+                    .and_then(|path| path.parent().map(|dir| dir.join("phyriad_fg.exe")))
+                    .is_some_and(|path| path.is_file());
+                ui.small(if backend_installed {
+                    "PhyriadFG backend: installed"
+                } else {
+                    "PhyriadFG backend: not installed — run tools\\setup-phyriadfg.ps1"
+                });
+            }
             ui.small("Install the pinned backend with tools\\setup-phyriadfg.ps1. AetherX then starts it alongside the game and targets the game process automatically. Actual output FPS must be verified on this PC.");
             ui.add_space(8.0);
             ui.label(&self.status);
