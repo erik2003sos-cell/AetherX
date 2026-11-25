@@ -8,6 +8,15 @@ Texture2D<float4> PreviousFrame : register(t0);
 Texture2D<float4> CurrentFrame  : register(t1);
 Texture2D<float2> FlowField     : register(t2);
 SamplerState LinearClamp       : register(s0);
+
+// Both entry points share one explicit D3D12 root signature. Ten root
+// constants match MotionFlowParams exactly; the three SRVs and two UAVs
+// are contiguous descriptor tables, with a separate linear-clamp sampler.
+#define MOTIONFLOW_ROOT_SIGNATURE \
+    "RootConstants(num32BitConstants=10, b0), " \
+    "DescriptorTable(SRV(t0, numDescriptors=3)), " \
+    "DescriptorTable(Sampler(s0)), " \
+    "DescriptorTable(UAV(u0, numDescriptors=2))"
 RWTexture2D<float2> OutFlow     : register(u0);
 RWTexture2D<float4> OutFrame    : register(u1);
 
@@ -37,6 +46,7 @@ bool Inside(int2 p)
 // Estimate the displacement from PreviousFrame to CurrentFrame at each
 // output pixel using a small local SAD search. This is deliberately a
 // conservative first implementation, not a claim of production quality.
+[RootSignature(MOTIONFLOW_ROOT_SIGNATURE)]
 [numthreads(8, 8, 1)]
 void EstimateFlow(uint3 tid : SV_DispatchThreadID)
 {
@@ -95,6 +105,7 @@ void EstimateFlow(uint3 tid : SV_DispatchThreadID)
 // Synthesize the temporal midpoint. Flow points from the previous frame
 // toward the current frame. A future host integration must handle HUD masks,
 // camera cuts, frame pacing, resource barriers, and swapchain lifetime.
+[RootSignature(MOTIONFLOW_ROOT_SIGNATURE)]
 [numthreads(8, 8, 1)]
 void SynthesizeMidpoint(uint3 tid : SV_DispatchThreadID)
 {
