@@ -126,8 +126,10 @@ fn start_framegen_when_window_exists(
             // runs warp/present work at panel rate and wastes GPU time.
             "--target-output-fps",
             "45",
-            // Smooth pair-seam velocity without changing motion vectors; this
-            // is the backend's text-safe cadence option.
+            // Avoid blending motion vectors across pair boundaries: the upstream
+            // backend documents that as less safe for fine text. Use cphase
+            // instead; it smooths cadence while leaving motion vectors untouched.
+            "--no-vblend",
             "--cphase",
         ]);
         if let Some(log) = framegen_log_file(game_pid) {
