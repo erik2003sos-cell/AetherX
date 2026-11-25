@@ -265,6 +265,19 @@ To compare hardware and software rendering, repeat with
 created. Compare the exception's module and offset, stack frames, and
 preceding messages across the two runs.
 
+### AetherX synthetic city benchmark
+
+Build the launcher and its separate benchmark window:
+
+```powershell
+cargo build --release -p victory --bin aetherx --bin aetherx_benchmark
+.\target\release\aetherx.exe
+```
+
+Choose **Run GTA-style benchmark** in AetherX. The 60-second synthetic city test exercises texture upload/rendering, animated scene drawing, app FPS and frame intervals, a basic Windows audio playback test, and launching a child process. Save its report under `%LOCALAPPDATA%\AetherX\benchmarks\latest-benchmark.txt`.
+
+This is an egui/OpenGL 2.5D test scene, not GTA 6, UE5, DirectX 12, or a prediction of GTA 6 FPS. It does not yet measure GPU/CPU utilization or VRAM. See [docs/aetherx-city-benchmark.md](docs/aetherx-city-benchmark.md) for scope and limitations.
+
 ## License
 
 GPL-3.0-or-later. See [LICENSE](LICENSE).
