@@ -5,7 +5,8 @@
 //! target process before generated frames can be produced.
 
 use std::path::Path;
-use std::process::Command;
+use std::process::{Child, Command};
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 
@@ -58,16 +59,55 @@ pub fn run(exe: &Path, args: &[String]) -> Result<()> {
     println!("process id     {game_pid}");
     println!("mode           native Windows/host process (no console emulation)");
 
-    // PhyriadFG captures the game's final window from outside the process,
-    // so it does not need game-engine hooks, Steam, or account access.
-    // Install tools/setup-phyriadfg.ps1 places the pinned backend beside AetherX.
+    // PhyriadFG resolves --window-pid immediately and exits if the game's
+    // window does not exist yet. Unity games can take several seconds to
+    // create that window, so retry short-lived startup failures instead of
+    // racing the game's startup. The process is accepted once it survives
+    // its initialization window.
     let fg_path = std::env::current_exe()?
         .parent()
         .context("AetherX executable has no parent directory")?
         .join("phyriad_fg.exe");
+    let fg_available = fg_path.is_file();
+    if !fg_available {
+        eprintln!("frame gen      backend not installed; run tools\\setup-phyriadfg.ps1");
+    }
+
+    // Keep the game and capture/presenter lifecycle together without blocking
+    // the launcher UI while the game creates its first visible window.
+    std::thread::spawn(move || {
+        let mut framegen = if fg_available {
+            start_framegen_when_window_exists(&fg_path, game_pid, &mut child)
+        } else {
+            None
+        };
+
+        let _ = child.wait();
+        if let Some(process) = framegen.as_mut() {
+            let _ = process.kill();
+            let _ = process.wait();
+        }
+    });
+    Ok(())
+}
+
+/// Start PhyriadFG once the game has a capturable window. PhyriadFG reports a
+/// missing window by exiting during startup; retry that case for up to 30 s.
+/// A backend that remains alive for 3 s is considered initialized.
+fn start_framegen_when_window_exists(
+    fg_path: &Path,
+    game_pid: u32,
+    game: &mut Child,
+) -> Option<Child> {
+    let deadline = Instant::now() + Duration::from_secs(30);
     let game_pid_arg = game_pid.to_string();
-    let mut framegen = if fg_path.is_file() {
-        match Command::new(&fg_path)
+
+    while Instant::now() < deadline {
+        if game.try_wait().ok().flatten().is_some() {
+            return None;
+        }
+
+        let mut process = match Command::new(fg_path)
             .args([
                 "--window-pid",
                 game_pid_arg.as_str(),
@@ -76,30 +116,45 @@ pub fn run(exe: &Path, args: &[String]) -> Result<()> {
             ])
             .spawn()
         {
-            Ok(process) => {
-                println!("frame gen      PhyriadFG started (2x, PID {game_pid})");
-                Some(process)
-            }
+            Ok(process) => process,
             Err(error) => {
                 eprintln!("frame gen      could not start PhyriadFG: {error}");
-                None
+                return None;
+            }
+        };
+
+        let startup_deadline = Instant::now() + Duration::from_secs(3);
+        loop {
+            if game.try_wait().ok().flatten().is_some() {
+                let _ = process.kill();
+                let _ = process.wait();
+                return None;
+            }
+
+            match process.try_wait() {
+                Ok(Some(status)) => {
+                    eprintln!(
+                        "frame gen      PhyriadFG startup exited ({status}); retrying while game window appears"
+                    );
+                    break;
+                }
+                Ok(None) if Instant::now() >= startup_deadline => {
+                    println!("frame gen      PhyriadFG initialized (2x, game PID {game_pid})");
+                    return Some(process);
+                }
+                Ok(None) => std::thread::sleep(Duration::from_millis(200)),
+                Err(error) => {
+                    eprintln!("frame gen      could not monitor PhyriadFG: {error}");
+                    let _ = process.kill();
+                    let _ = process.wait();
+                    return None;
+                }
             }
         }
-    } else {
-        eprintln!(
-            "frame gen      backend not installed; run tools\\setup-phyriadfg.ps1"
-        );
-        None
-    };
 
-    // Keep the capture/presenter alive exactly as long as the game. Closing
-    // the game also terminates the external frame-generation process.
-    std::thread::spawn(move || {
-        let _ = child.wait();
-        if let Some(process) = framegen.as_mut() {
-            let _ = process.kill();
-            let _ = process.wait();
-        }
-    });
-    Ok(())
+        std::thread::sleep(Duration::from_millis(500));
+    }
+
+    eprintln!("frame gen      no capturable game window appeared within 30 s; game continues without frame generation");
+    None
 }
