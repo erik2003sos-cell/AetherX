@@ -18,7 +18,7 @@ pub fn run(roots: Vec<PathBuf>) -> Result<()> {
         roots
     };
 
-    let games = discover(&roots);
+    let games = discover_games(&roots);
     anyhow::ensure!(
         !games.is_empty(),
         "no game executables found; pass one or more install folders, e.g. `victory library \"C:\\Games\"`"
@@ -48,7 +48,7 @@ pub fn run(roots: Vec<PathBuf>) -> Result<()> {
     launch::run(selected, &[])
 }
 
-fn default_roots() -> Vec<PathBuf> {
+pub fn default_roots() -> Vec<PathBuf> {
     let mut roots = Vec::new();
     if let Some(program_files_x86) = std::env::var_os("ProgramFiles(x86)") {
         roots.push(PathBuf::from(program_files_x86).join("Steam/steamapps/common"));
@@ -60,7 +60,7 @@ fn default_roots() -> Vec<PathBuf> {
     roots
 }
 
-fn discover(roots: &[PathBuf]) -> Vec<PathBuf> {
+pub fn discover_games(roots: &[PathBuf]) -> Vec<PathBuf> {
     let mut found = BTreeSet::new();
     for root in roots.iter().filter(|root| root.is_dir()) {
         for entry in WalkDir::new(root)
