@@ -39,7 +39,7 @@ impl BenchmarkApp {
         } else { "Started directly".to_owned() };
         Self {
             started: Instant::now(), last_frame: Instant::now(),
-            frame_times: VecDeque::with_capacity(1200), texture, scene_load: 3,
+            frame_times: VecDeque::with_capacity(20_000), texture, scene_load: 3,
             audio_status: "Not tested yet".to_owned(), launch_note, finished: false, frames: 0,
         }
     }
@@ -142,7 +142,7 @@ impl eframe::App for BenchmarkApp {
         self.last_frame = now;
         if !self.finished && self.started.elapsed().as_secs_f32() < TEST_SECONDS {
             self.frame_times.push_back(dt);
-            if self.frame_times.len() > 1200 { self.frame_times.pop_front(); }
+            if self.frame_times.len() > 20_000 { let _ = self.frame_times.pop_front(); }
             self.frames += 1;
         }
         if self.started.elapsed().as_secs_f32() >= TEST_SECONDS { self.finished = true; }
