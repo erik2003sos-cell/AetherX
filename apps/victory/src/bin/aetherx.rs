@@ -11,7 +11,6 @@ struct AetherXApp {
     games: Vec<PathBuf>,
     selected: Option<usize>,
     status: String,
-    frame_generation_2x: bool,
 }
 
 impl AetherXApp {
@@ -22,7 +21,6 @@ impl AetherXApp {
             games,
             selected: None,
             status: format!("Ready — found {count} games"),
-            frame_generation_2x: load_frame_generation_setting(),
         }
     }
 
@@ -30,22 +28,6 @@ impl AetherXApp {
         self.games = library::discover_games(&library::default_roots());
         self.selected = None;
         self.status = format!("Library refreshed — found {} games", self.games.len());
-    }
-
-    fn set_frame_generation(&mut self, enabled: bool) {
-        self.frame_generation_2x = enabled;
-        match save_frame_generation_setting(enabled) {
-            Ok(()) => {
-                self.status = if enabled {
-                    "2× Frame Generation requested. The rendering backend is still under development; this does not generate frames yet.".to_owned()
-                } else {
-                    "2× Frame Generation disabled.".to_owned()
-                };
-            }
-            Err(error) => {
-                self.status = format!("Setting changed for this session, but could not be saved: {error}");
-            }
-        }
     }
 
     fn play_selected(&mut self) {
@@ -57,54 +39,16 @@ impl AetherXApp {
             self.status = "The selected game is no longer in the library.".to_owned();
             return;
         };
-        match launch::run_with_frame_generation(exe, &[], self.frame_generation_2x) {
+        match launch::run_with_frame_generation(exe, &[], true) {
             Ok(()) => {
                 let name = exe.file_stem().and_then(|s| s.to_str()).unwrap_or("Game");
-                self.status = if self.frame_generation_2x {
-                    format!("Started {name} — 2× Frame Generation requested (backend not active yet)")
-                } else {
-                    format!("Started {name}")
-                };
+                self.status = format!(
+                    "Started {name} — AetherX 2× Frame Generation is always enabled by default (backend integration still in progress)"
+                );
             }
             Err(error) => self.status = format!("Could not start game: {error:#}"),
         }
     }
-}
-
-fn settings_path() -> Option<PathBuf> {
-    std::env::var_os("LOCALAPPDATA")
-        .map(PathBuf::from)
-        .map(|root| root.join("AetherX").join("settings.ini"))
-}
-
-fn load_frame_generation_setting() -> bool {
-    let Some(path) = settings_path() else {
-        return true;
-    };
-    std::fs::read_to_string(path)
-        .ok()
-        .and_then(|contents| {
-            contents.lines().find_map(|line| {
-                let (key, value) = line.split_once('=')?;
-                (key.trim() == "frame_generation_2x").then(|| value.trim() != "false")
-            })
-        })
-        .unwrap_or(true)
-}
-
-fn save_frame_generation_setting(enabled: bool) -> std::io::Result<()> {
-    let Some(path) = settings_path() else {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::NotFound,
-            "LOCALAPPDATA is not set",
-        ));
-    };
-    let parent = path.parent().expect("settings path has a parent");
-    std::fs::create_dir_all(parent)?;
-    std::fs::write(
-        path,
-        format!("frame_generation_2x={}\n", if enabled { "true" } else { "false" }),
-    )
 }
 
 impl eframe::App for AetherXApp {
@@ -145,11 +89,8 @@ impl eframe::App for AetherXApp {
 
             ui.separator();
             ui.heading("Performance");
-            let mut enabled = self.frame_generation_2x;
-            if ui.checkbox(&mut enabled, "Enable 2× Frame Generation for launched games").changed() {
-                self.set_frame_generation(enabled);
-            }
-            ui.small("Universal D3D12 frame-generation backend is under development. The setting is saved and passed to launched games, but generated frames are not active yet.");
+            ui.label("2× Frame Generation: ALWAYS ON");
+            ui.small("AetherX requests 2× Frame Generation for every game launched from the app. The universal rendering backend is still under development; generated frames are not active yet.");
             ui.add_space(8.0);
             ui.label(&self.status);
             ui.add_space(4.0);
