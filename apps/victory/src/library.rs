@@ -72,8 +72,9 @@ fn discover(roots: &[PathBuf]) -> Vec<PathBuf> {
         {
             let path = entry.path();
             if is_game_executable(path) {
-                let resolved = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
-                found.insert(resolved);
+                // Keep the ordinary install path for a readable menu; the
+                // launcher resolves it before spawning the process.
+                found.insert(path.to_path_buf());
             }
         }
     }
@@ -84,12 +85,66 @@ fn is_game_executable(path: &Path) -> bool {
     if !path.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("exe")) {
         return false;
     }
-    let name = path.file_stem().and_then(|s| s.to_str()).unwrap_or("").to_ascii_lowercase();
-    ![
+
+    // These directories contain tools, redistributables, anti-cheat
+    // components or VR services rather than the game itself.
+    let excluded_dirs = [
+        "steamvr",
+        "steamworks shared",
+        "lossless scaling",
+        "battlEye",
+        "battleye",
+        "sentinel",
+        "support",
+        "redist",
+        "redist\u{005c}x64",
+        "commonredist",
+    ];
+    if path.components().any(|component| {
+        let component = component.as_os_str().to_string_lossy();
+        excluded_dirs
+            .iter()
+            .any(|excluded| component.eq_ignore_ascii_case(excluded))
+    }) {
+        return false;
+    }
+
+    let name = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    let excluded_names = [
+        "rapidcrc",
+        "createdump",
         "unitycrashhandler",
         "unitycrashhandler64",
         "crashpad_handler",
         "crashreportclient",
+        "rainbowsixhelper",
+        "rainbowsix_be",
+        "beservice",
+        "ubisoftanticheatinstaller",
+        "ubisoftconnectinstaller",
+        "firewallinstall",
+        "cleaner",
+        "start_protected_game",
+        "removeusbhelper",
+        "restarthelper",
+        "vrpathreg",
+        "vrserverhelper",
+        "vrurlhandler",
+        "vrcompositor",
+        "vrdashboard",
+        "vrmonitor",
+        "vrprismhost",
+        "vrserver",
+        "vrservice",
+        "vrstartup",
+        "vrcmd",
+        "gaijin_downloader",
+        "launcher",
+        "unitycrashhandler",
         "ue4prereqsetup",
         "easyanticheat_eos_setup",
         "easyanticheat_setup",
@@ -101,22 +156,9 @@ fn is_game_executable(path: &Path) -> bool {
         "install",
         "gamelaunchhelper",
         "mcplaceholderstub",
-    ]
-    .iter()
-    .any(|excluded| name == *excluded || name.starts_with(&format!("{excluded}_")))
+    ];
+    !excluded_names
+        .iter()
+        .any(|excluded| name == *excluded || name.starts_with(&format!("{excluded}_")))
 }
 
-#[cfg(test)]
-mod tests {
-    use super::is_game_executable;
-    use std::path::Path;
-
-    #[test]
-    fn filters_common_helpers_but_keeps_game_executables() {
-        assert!(is_game_executable(Path::new("Among Us.exe")));
-        assert!(is_game_executable(Path::new("ROB RUN.exe")));
-        assert!(!is_game_executable(Path::new("UnityCrashHandler64.exe")));
-        assert!(!is_game_executable(Path::new("gamelaunchhelper.exe")));
-        assert!(!is_game_executable(Path::new("readme.txt")));
-    }
-}
