@@ -13,7 +13,7 @@ use anyhow::{Context, Result};
 /// directory. Arguments are passed as individual arguments, never through a
 /// shell.
 pub fn run(exe: &Path, args: &[String]) -> Result<()> {
-    run_with_frame_generation(exe, args, false)
+    run_with_frame_generation(exe, args, true)
 }
 
 /// Start a native executable and pass AetherX's frame-generation preference
