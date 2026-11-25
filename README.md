@@ -120,6 +120,26 @@ title's window has focus:
 | F / H | stick clicks |
 | Esc, Tab | Menu, View |
 
+## Launching ordinary PC games
+
+VIctory can also start a normal Windows game executable as a host process.
+This is a launcher path, not console emulation: the game runs with its own
+native Windows renderer, input and audio. It does not make Xbox-only game
+files runnable on PC or add performance to the game.
+
+```powershell
+target\release\victory.exe launch "C:\Games\Example Game\Game.exe"
+```
+
+Pass game arguments after `--`:
+
+```powershell
+target\release\victory.exe launch "C:\Games\Example Game\Game.exe" -- -windowed
+```
+
+The launcher uses the game's install folder as its working directory and
+starts it without going through a command shell.
+
 ## Commands
 
 ```
@@ -131,6 +151,7 @@ victory translate [paths...] [--validate] [--pipelines] [--list] [--jobs N]
 victory translate [paths...] --cache [--pipelines] [--jobs N]
 victory run <exe> [--execute] [--unimplemented trap|zero] [--strict]
             [--console series-x|series-s] [-- <title arguments>]
+victory launch <exe> [-- <game arguments>]
 victory config
 ```
 
