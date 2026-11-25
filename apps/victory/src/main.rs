@@ -5,6 +5,7 @@
 
 mod census;
 mod inspect;
+mod launch;
 mod prebuild;
 mod run;
 mod shader;
@@ -19,7 +20,7 @@ use clap::{Parser, Subcommand, ValueEnum};
 #[command(
     name = "victory",
     version,
-    about = "Run an Xbox Series title natively on Windows"
+    about = "Launch native PC games and run Xbox Series titles on Windows"
 )]
 struct Cli {
     #[command(subcommand)]
@@ -120,6 +121,13 @@ enum Command {
         #[arg(last = true)]
         title_args: Vec<String>,
     },
+    /// Launch a native PC game through the host operating system (no console emulation).
+    Launch {
+        exe: PathBuf,
+        /// Arguments passed to the game after --.
+        #[arg(last = true)]
+        game_args: Vec<String>,
+    },
     /// Show the resolved configuration and check it.
     Config,
 }
@@ -192,6 +200,7 @@ fn main() -> Result<()> {
             }
             Ok(())
         }
+        Command::Launch { exe, game_args } => launch::run(&exe, &game_args),
         Command::Config => show_config(),
     }
 }
