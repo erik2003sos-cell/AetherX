@@ -23,6 +23,11 @@ mod windows_runtime {
 
     struct Module(windows::Win32::Foundation::HMODULE);
 
+    // Loaded Windows module handles are process-wide references. The runtime
+    // only queries immutable export addresses after loading.
+    unsafe impl Send for Module {}
+    unsafe impl Sync for Module {}
+
     impl Drop for Module {
         fn drop(&mut self) {
             // SAFETY: this handle was returned by LoadLibraryW and is owned here.
@@ -81,12 +86,22 @@ mod windows_runtime {
 }
 
 #[cfg(windows)]
-pub fn availability() -> Result<String, String> {
-    windows_runtime::FsrRuntime::load()
-        .map(|runtime| format!("SDK DLLs and API exports found in {}", runtime.directory.display()))
+pub fn status() -> &'static str {
+    use std::sync::OnceLock;
+    static RUNTIME: OnceLock<Result<windows_runtime::FsrRuntime, String>> = OnceLock::new();
+    match RUNTIME.get_or_init(windows_runtime::FsrRuntime::load) {
+        Ok(runtime) => {
+            let _ = &runtime.directory;
+            "FSR SDK detected — render integration pending"
+        }
+        Err(reason) => {
+            let _ = reason;
+            "FSR SDK not installed — using safe fallback"
+        }
+    }
 }
 
 #[cfg(not(windows))]
-pub fn availability() -> Result<String, String> {
-    Err("FSR Frame Generation requires the Windows DirectX 12 backend".to_owned())
+pub fn status() -> &'static str {
+    "FSR Frame Generation requires the Windows DirectX 12 backend"
 }
