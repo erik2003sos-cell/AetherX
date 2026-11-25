@@ -1,20 +1,16 @@
-//! Launch a native PC game as a separate host process.
+//! Launch a native Windows game as a separate host process.
 //!
-//! Frame generation is an AetherX-wide policy: every launched game receives
-//! the same request. The rendering backend must still be available in the
-//! target process before generated frames can be produced.
+//! This path deliberately does not inject overlays or frame-generation
+//! backends. AetherX's performance work focuses on measurable native-game
+//! optimizations, frame pacing, graphics settings and audio reliability.
 
-use std::fs::OpenOptions;
-use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Stdio};
-use std::time::{Duration, Instant};
+use std::path::Path;
+use std::process::Command;
 
 use anyhow::{Context, Result};
 
 /// Start a native executable with its install directory as the working
-/// directory. Arguments are passed as individual arguments, never through a
-/// shell. The backend renders at up to 2x internally, while its fractional
-/// output controller targets 45 FPS (about 1.5x for a 30 FPS source).
+/// directory. Arguments are passed directly, never through a shell.
 pub fn run(exe: &Path, args: &[String]) -> Result<()> {
     anyhow::ensure!(
         exe.is_file(),
@@ -29,9 +25,8 @@ pub fn run(exe: &Path, args: &[String]) -> Result<()> {
         .parent()
         .context("game executable has no parent directory")?;
 
-    // Among Us ships as a Unity Windows player. Force its supported D3D12
-    // backend from AetherX itself so the future DX12 frame-generation path
-    // can attach without requiring Steam launch options or account access.
+    // Among Us ships as a Unity Windows player. Prefer its native D3D12
+    // renderer unless the user has explicitly selected another backend.
     let is_among_us = exe
         .file_stem()
         .is_some_and(|name| name.to_string_lossy().eq_ignore_ascii_case("Among Us"));
@@ -48,151 +43,24 @@ pub fn run(exe: &Path, args: &[String]) -> Result<()> {
         command.arg("-force-d3d12");
     }
 
-    let mut child = command
-        .env("AETHERX_FRAME_GENERATION", "1.5x-target-45fps")
+    let child = command
         .current_dir(directory)
         .spawn()
         .with_context(|| format!("starting native PC game {}", exe.display()))?;
 
-    let game_pid = child.id();
     println!("launched       {}", exe.display());
     println!("working dir    {}", directory.display());
-    println!("process id     {game_pid}");
-    println!("mode           native Windows/host process (no console emulation)");
+    println!("process id     {}", child.id());
+    println!("mode           native Windows process; no frame-generation overlay");
 
-    // PhyriadFG resolves --window-pid immediately and exits if the game's
-    // window does not exist yet. Unity games can take several seconds to
-    // create that window, so retry short-lived startup failures instead of
-    // racing the game's startup. The process is accepted once it survives
-    // its initialization window.
-    let fg_path = std::env::current_exe()?
-        .parent()
-        .context("AetherX executable has no parent directory")?
-        .join("phyriad_fg.exe");
-    let fg_available = fg_path.is_file();
-    if !fg_available {
-        eprintln!("frame gen      backend not installed; run tools\\setup-phyriadfg.ps1");
-    }
-
-    // Keep the game and capture/presenter lifecycle together without blocking
-    // the launcher UI while the game creates its first visible window.
+    // Keep the process handle alive and report its exit status without
+    // blocking the launcher UI.
     std::thread::spawn(move || {
-        let mut framegen = if fg_available {
-            start_framegen_when_window_exists(&fg_path, game_pid, &mut child)
-        } else {
-            None
-        };
-
-        let _ = child.wait();
-        if let Some(process) = framegen.as_mut() {
-            let _ = process.kill();
-            let _ = process.wait();
+        let mut child = child;
+        if let Err(error) = child.wait() {
+            eprintln!("game process   wait failed: {error}");
         }
     });
+
     Ok(())
-}
-
-/// Start PhyriadFG once the game has a capturable window. PhyriadFG reports a
-/// missing window by exiting during startup; retry that case for up to 30 s.
-/// A backend that remains alive for 3 s is considered initialized.
-fn start_framegen_when_window_exists(
-    fg_path: &Path,
-    game_pid: u32,
-    game: &mut Child,
-) -> Option<Child> {
-    let deadline = Instant::now() + Duration::from_secs(30);
-    let game_pid_arg = game_pid.to_string();
-
-    while Instant::now() < deadline {
-        if game.try_wait().ok().flatten().is_some() {
-            return None;
-        }
-
-        let mut command = Command::new(fg_path);
-        // Keep PhyriadFG's default own-window presenter. It yields its
-        // presentation plane when another app (including the desktop) takes
-        // focus, preventing the last game frame from remaining over the
-        // desktop during Alt-Tab. The DComp fallback stays visible over other
-        // windows on this setup, so do not pass --no-present-own-window.
-        command.args([
-            "--window-pid",
-            game_pid_arg.as_str(),
-            "--fg-factor",
-            "2",
-            // Aim for ~1.5x output from a 30 FPS source. On this 240 Hz display,
-            // PhyriadFG's low-cost tick decimator snaps 45 to the nearest exact
-            // refresh divisor: 48 FPS (240 / 5), i.e. ~1.6x at 30 source FPS.
-            // Do NOT pass --no-decimate: that legacy fractional quantizer still
-            // runs warp/present work at panel rate and wastes GPU time.
-            "--target-output-fps",
-            "45",
-            // Avoid blending motion vectors across pair boundaries: the upstream
-            // backend documents that as less safe for fine text. Use cphase
-            // instead; it smooths cadence while leaving motion vectors untouched.
-            "--no-vblend",
-            "--cphase",
-        ]);
-        if let Some(log) = framegen_log_file(game_pid) {
-            if let Ok(stderr) = log.try_clone() {
-                command.stdout(Stdio::from(log)).stderr(Stdio::from(stderr));
-            }
-        }
-        let mut process = match command.spawn() {
-            Ok(process) => process,
-            Err(error) => {
-                eprintln!("frame gen      could not start PhyriadFG: {error}");
-                return None;
-            }
-        };
-
-        let startup_deadline = Instant::now() + Duration::from_secs(3);
-        loop {
-            if game.try_wait().ok().flatten().is_some() {
-                let _ = process.kill();
-                let _ = process.wait();
-                return None;
-            }
-
-            match process.try_wait() {
-                Ok(Some(status)) => {
-                    eprintln!(
-                        "frame gen      PhyriadFG startup exited ({status}); retrying while game window appears"
-                    );
-                    break;
-                }
-                Ok(None) if Instant::now() >= startup_deadline => {
-                    println!("frame gen      PhyriadFG initialized (45 FPS request; ~48 FPS on 240 Hz, ~1.6x at 30 source FPS; game PID {game_pid})");
-                    return Some(process);
-                }
-                Ok(None) => std::thread::sleep(Duration::from_millis(200)),
-                Err(error) => {
-                    eprintln!("frame gen      could not monitor PhyriadFG: {error}");
-                    let _ = process.kill();
-                    let _ = process.wait();
-                    return None;
-                }
-            }
-        }
-
-        std::thread::sleep(Duration::from_millis(500));
-    }
-
-    eprintln!("frame gen      no capturable game window appeared within 30 s; game continues without frame generation");
-    None
-}
-
-
-/// Store backend diagnostics where the user can retrieve them even though
-/// the AetherX GUI itself has no console window.
-fn framegen_log_file(game_pid: u32) -> Option<std::fs::File> {
-    let base = std::env::var_os("LOCALAPPDATA")
-        .map(PathBuf::from)
-        .unwrap_or_else(std::env::temp_dir);
-    let directory = base.join("AetherX").join("logs");
-    std::fs::create_dir_all(&directory).ok()?;
-    OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(directory.join(format!("phyriadfg-{game_pid}.log")))
-        .ok()
 }
