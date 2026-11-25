@@ -39,7 +39,7 @@ impl AetherXApp {
             self.status = "The selected game is no longer in the library.".to_owned();
             return;
         };
-        match launch::run_with_frame_generation(exe, &[], true) {
+        match launch::run(exe, &[]) {
             Ok(()) => {
                 let name = exe.file_stem().and_then(|s| s.to_str()).unwrap_or("Game");
                 self.status = format!(
