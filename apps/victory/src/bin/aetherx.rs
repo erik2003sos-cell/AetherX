@@ -90,6 +90,8 @@ impl eframe::App for AetherXApp {
             ui.separator();
             ui.heading("Performance");
             ui.label("2× Frame Generation: ALWAYS ON");
+            #[cfg(windows)]
+            ui.small(victory_gpu::fsr::status());
             ui.small("AetherX requests 2× Frame Generation for every game launched from the app. The universal rendering backend is still under development; generated frames are not active yet.");
             ui.add_space(8.0);
             ui.label(&self.status);
