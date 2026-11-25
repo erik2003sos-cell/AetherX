@@ -1,33 +1,24 @@
 $ErrorActionPreference = "Stop"
 
-# Build the MIT-licensed PhyriadFG frame generator at a pinned upstream commit.
+# Install the official, pinned PhyriadFG 0.6.0 experimental CLI release.
+# SHA-256 is the digest published by the upstream GitHub release API.
 $root = Split-Path -Parent $PSScriptRoot
-$vendor = Join-Path $root "vendor\PhyriadFG"
-$pin = "2ea163762c5bd3d2e79506f629de2fa1a9f83e1b"
-
-if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-    throw "Git is required. Install Git for Windows and rerun this script."
-}
-if (-not $env:VULKAN_SDK) {
-    throw "Vulkan SDK is required. Install it from https://vulkan.lunarg.com/sdk/home and reopen PowerShell."
-}
-
-if (-not (Test-Path (Join-Path $vendor ".git"))) {
-    New-Item -ItemType Directory -Force -Path (Split-Path $vendor) | Out-Null
-    git clone https://github.com/Swately/PhyriadFG.git $vendor
-}
-git -C $vendor fetch origin $pin
-git -C $vendor checkout --detach $pin
-
-$build = Join-Path $vendor "build-release.bat"
-if (-not (Test-Path $build)) { throw "PhyriadFG build script was not found." }
-& $build
-if ($LASTEXITCODE -ne 0) { throw "PhyriadFG build failed with exit code $LASTEXITCODE." }
-
-$binary = Join-Path $vendor "build-release\phyriad_fg.exe"
-if (-not (Test-Path $binary)) { throw "PhyriadFG did not produce phyriad_fg.exe." }
+$version = "v0.6.0-experimental"
+$url = "https://github.com/Swately/PhyriadFG/releases/download/$version/phyriad_fg.exe"
+$expectedSha256 = "52c0389fb48d0a789825aab7c682eaf7b49da301d6b8925cf04dee8a3deae6b2"
 
 $dest = Join-Path $root "target\release\phyriad_fg.exe"
 New-Item -ItemType Directory -Force -Path (Split-Path $dest) | Out-Null
-Copy-Item -Force $binary $dest
-Write-Host "Installed AetherX frame-generation backend: $dest"
+$temp = Join-Path $env:TEMP "aetherx-phyriad_fg.exe"
+
+Write-Host "Downloading PhyriadFG $version..."
+Invoke-WebRequest -Uri $url -OutFile $temp -UseBasicParsing
+$actualSha256 = (Get-FileHash -Path $temp -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($actualSha256 -ne $expectedSha256) {
+    Remove-Item -Force $temp -ErrorAction SilentlyContinue
+    throw "PhyriadFG checksum mismatch. Expected $expectedSha256, got $actualSha256."
+}
+
+Move-Item -Force $temp $dest
+Write-Host "Verified and installed PhyriadFG: $dest"
+Write-Host "AetherX will start it automatically with each game."
