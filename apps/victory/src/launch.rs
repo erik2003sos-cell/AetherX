@@ -113,6 +113,11 @@ fn start_framegen_when_window_exists(
                 game_pid_arg.as_str(),
                 "--fg-factor",
                 "2",
+                // The default own-window flip plane yields whenever another
+                // window takes foreground, which stopped presenting during
+                // the previous Among Us test. Use the DComp overlay fallback
+                // so frame presentation does not depend on foreground focus.
+                "--no-present-own-window",
             ])
             .spawn()
         {
