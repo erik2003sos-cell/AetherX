@@ -35,6 +35,8 @@ pub mod frame;
 #[cfg(windows)]
 mod host;
 #[cfg(windows)]
+pub mod fsr;
+#[cfg(windows)]
 mod indirect;
 pub mod list;
 #[cfg(windows)]
