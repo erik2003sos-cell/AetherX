@@ -43,7 +43,7 @@ impl AetherXApp {
             Ok(()) => {
                 let name = exe.file_stem().and_then(|s| s.to_str()).unwrap_or("Game");
                 self.status = format!(
-                    "Started {name} — AetherX 2× Frame Generation is always enabled by default (backend integration still in progress)"
+                    "Started {name} — AetherX will launch PhyriadFG automatically when its backend is installed"
                 );
             }
             Err(error) => self.status = format!("Could not start game: {error:#}"),
@@ -89,10 +89,10 @@ impl eframe::App for AetherXApp {
 
             ui.separator();
             ui.heading("Performance");
-            ui.label("2× Frame Generation: ALWAYS ON");
+            ui.label("2× Frame Generation: PhyriadFG external backend");
             #[cfg(windows)]
             ui.small(victory_gpu::fsr::status());
-            ui.small("AetherX requests 2× Frame Generation for every game launched from the app. The universal rendering backend is still under development; generated frames are not active yet.");
+            ui.small("Install the pinned backend with tools\\setup-phyriadfg.ps1. AetherX then starts it alongside the game and targets the game process automatically. Actual output FPS must be verified on this PC.");
             ui.add_space(8.0);
             ui.label(&self.status);
             ui.add_space(4.0);
