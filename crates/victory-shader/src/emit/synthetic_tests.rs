@@ -146,6 +146,13 @@ fn first(u: f32, size: u32) -> i64 {
     ((f64::from(u) * f64::from(size) * 512.0).floor() as i64 - 255) >> 9
 }
 
+// WARP multiplies the normalized coordinate by the mip size in f32 before
+// rounding. The hardware reference above uses the exact product.
+fn first_warp(u: f32, size: u32) -> i64 {
+    let u = if u.is_nan() { 0.0 } else { u.clamp(-2.0, 2.0) };
+    ((f64::from(u * size as f32) * 512.0).floor() as i64 - 255) >> 9
+}
+
 #[test]
 fn gathers_at_a_level_match_the_hardware() {
     // 24×16 then 12×8, 6×4, 3×2; red = level × 1000 + y × 32 + x + 1.
@@ -247,10 +254,11 @@ fn gathers_at_a_level_match_the_hardware() {
             let [offset, u, v, level] = *r;
             let level = level.min(3);
             let (w, h) = (24 >> level, 16 >> level);
+            let index = if warp { first_warp } else { first };
             let at = |ox: i64, oy: i64| {
                 let (x, y) = (
-                    first(f32::from_bits(u), w) + ox,
-                    first(f32::from_bits(v), h) + oy,
+                    index(f32::from_bits(u), w) + ox,
+                    index(f32::from_bits(v), h) + oy,
                 );
                 vec![
                     texel(level, x, y + 1),
