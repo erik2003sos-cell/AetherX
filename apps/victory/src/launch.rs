@@ -4,8 +4,9 @@
 //! the same request. The rendering backend must still be available in the
 //! target process before generated frames can be produced.
 
-use std::path::Path;
-use std::process::{Child, Command};
+use std::fs::OpenOptions;
+use std::path::{Path, PathBuf};
+use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
@@ -107,20 +108,24 @@ fn start_framegen_when_window_exists(
             return None;
         }
 
-        let mut process = match Command::new(fg_path)
-            .args([
-                "--window-pid",
-                game_pid_arg.as_str(),
-                "--fg-factor",
-                "2",
-                // The default own-window flip plane yields whenever another
-                // window takes foreground, which stopped presenting during
-                // the previous Among Us test. Use the DComp overlay fallback
-                // so frame presentation does not depend on foreground focus.
-                "--no-present-own-window",
-            ])
-            .spawn()
-        {
+        let mut command = Command::new(fg_path);
+        command.args([
+            "--window-pid",
+            game_pid_arg.as_str(),
+            "--fg-factor",
+            "2",
+            // The default own-window flip plane yields whenever another
+            // window takes foreground, which stopped presenting during
+            // the previous Among Us test. Use the DComp overlay fallback
+            // so frame presentation does not depend on foreground focus.
+            "--no-present-own-window",
+        ]);
+        if let Some(log) = framegen_log_file(game_pid) {
+            if let Ok(stderr) = log.try_clone() {
+                command.stdout(Stdio::from(log)).stderr(Stdio::from(stderr));
+            }
+        }
+        let mut process = match command.spawn() {
             Ok(process) => process,
             Err(error) => {
                 eprintln!("frame gen      could not start PhyriadFG: {error}");
@@ -162,4 +167,20 @@ fn start_framegen_when_window_exists(
 
     eprintln!("frame gen      no capturable game window appeared within 30 s; game continues without frame generation");
     None
+}
+
+
+/// Store backend diagnostics where the user can retrieve them even though
+/// the AetherX GUI itself has no console window.
+fn framegen_log_file(game_pid: u32) -> Option<std::fs::File> {
+    let base = std::env::var_os("LOCALAPPDATA")
+        .map(PathBuf::from)
+        .unwrap_or_else(std::env::temp_dir);
+    let directory = base.join("AetherX").join("logs");
+    std::fs::create_dir_all(&directory).ok()?;
+    OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(directory.join(format!("phyriadfg-{game_pid}.log")))
+        .ok()
 }
