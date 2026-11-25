@@ -13,8 +13,8 @@ use anyhow::{Context, Result};
 
 /// Start a native executable with its install directory as the working
 /// directory. Arguments are passed as individual arguments, never through a
-/// shell. 2x frame generation is always requested; there is no per-game
-/// opt-out or user-facing toggle.
+/// shell. The backend renders at up to 2x internally, while its fractional
+/// output controller targets 45 FPS (about 1.5x for a 30 FPS source).
 pub fn run(exe: &Path, args: &[String]) -> Result<()> {
     anyhow::ensure!(
         exe.is_file(),
@@ -49,7 +49,7 @@ pub fn run(exe: &Path, args: &[String]) -> Result<()> {
     }
 
     let mut child = command
-        .env("AETHERX_FRAME_GENERATION", "2x")
+        .env("AETHERX_FRAME_GENERATION", "1.5x-target-45fps")
         .current_dir(directory)
         .spawn()
         .with_context(|| format!("starting native PC game {}", exe.display()))?;
@@ -119,6 +119,12 @@ fn start_framegen_when_window_exists(
             game_pid_arg.as_str(),
             "--fg-factor",
             "2",
+            // Fractional output controller: 45 FPS is ~1.5x for a 30 FPS source.
+            // --no-decimate selects its fractional content quantizer instead of
+            // snapping to an exact divisor of the monitor refresh rate.
+            "--target-output-fps",
+            "45",
+            "--no-decimate",
         ]);
         if let Some(log) = framegen_log_file(game_pid) {
             if let Ok(stderr) = log.try_clone() {
@@ -149,7 +155,7 @@ fn start_framegen_when_window_exists(
                     break;
                 }
                 Ok(None) if Instant::now() >= startup_deadline => {
-                    println!("frame gen      PhyriadFG initialized (2x, game PID {game_pid})");
+                    println!("frame gen      PhyriadFG initialized (45 FPS target, ~1.5x at 30 source FPS, game PID {game_pid})");
                     return Some(process);
                 }
                 Ok(None) => std::thread::sleep(Duration::from_millis(200)),
