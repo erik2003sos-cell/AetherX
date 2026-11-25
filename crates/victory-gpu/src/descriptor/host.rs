@@ -98,11 +98,6 @@ const DYNAMIC: u32 = 1 << 18;
 const MIN_DYNAMIC: u32 = 1 << 16;
 
 impl HostHeap {
-    /// First slot reserved for persistent title-memory view pairs.
-    pub(crate) fn pair_start(&self) -> u32 {
-        self.count + self.dynamic
-    }
-
     pub(crate) fn new(sampler: bool, count: u32) -> Option<Self> {
         let host = host()?;
         let kind = if sampler {
