@@ -98,6 +98,11 @@ const DYNAMIC: u32 = 1 << 18;
 const MIN_DYNAMIC: u32 = 1 << 16;
 
 impl HostHeap {
+    /// First slot reserved for persistent title-memory view pairs.
+    pub(crate) fn pair_start(&self) -> u32 {
+        self.count + self.dynamic
+    }
+
     pub(crate) fn new(sampler: bool, count: u32) -> Option<Self> {
         let host = host()?;
         let kind = if sampler {
@@ -1483,7 +1488,7 @@ mod tests {
         // `HEAP_VIEWS`, `HEAP_SAMPLERS`).
         // SAFETY: plain queries of live heaps.
         unsafe {
-            assert!(heap.heap.GetDesc().NumDescriptors >= victory_shader::emit::HEAP_VIEWS);
+            assert!(heap.heap.GetDesc().NumDescriptors >= heap.count + heap.dynamic);
             let samplers = HostHeap::new(true, 128).unwrap();
             assert!(samplers.heap.GetDesc().NumDescriptors >= victory_shader::emit::HEAP_SAMPLERS);
         }
