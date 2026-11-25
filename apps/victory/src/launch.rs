@@ -109,16 +109,16 @@ fn start_framegen_when_window_exists(
         }
 
         let mut command = Command::new(fg_path);
+        // Keep PhyriadFG's default own-window presenter. It yields its
+        // presentation plane when another app (including the desktop) takes
+        // focus, preventing the last game frame from remaining over the
+        // desktop during Alt-Tab. The DComp fallback stays visible over other
+        // windows on this setup, so do not pass --no-present-own-window.
         command.args([
             "--window-pid",
             game_pid_arg.as_str(),
             "--fg-factor",
             "2",
-            // The default own-window flip plane yields whenever another
-            // window takes foreground, which stopped presenting during
-            // the previous Among Us test. Use the DComp overlay fallback
-            // so frame presentation does not depend on foreground focus.
-            "--no-present-own-window",
         ]);
         if let Some(log) = framegen_log_file(game_pid) {
             if let Ok(stderr) = log.try_clone() {
