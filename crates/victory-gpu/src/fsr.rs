@@ -11,7 +11,7 @@ mod windows_runtime {
     use std::os::windows::ffi::OsStrExt;
     use std::path::{Path, PathBuf};
 
-    use windows::Win32::System::LibraryLoader::{FreeLibrary, GetProcAddress, LoadLibraryW};
+    use windows::Win32::System::LibraryLoader::{GetProcAddress, LoadLibraryW};
     use windows::core::{PCSTR, PCWSTR};
 
     const LOADER_DLL: &str = "amd_fidelityfx_loader_dx12.dll";
@@ -26,17 +26,11 @@ mod windows_runtime {
 
     struct Module(windows::Win32::Foundation::HMODULE);
 
-    // The handles are immutable after LoadLibraryW. The cached runtime keeps
-    // both modules loaded until process shutdown while entry points are used.
+    // The handles are immutable after LoadLibraryW. This process-wide cache
+    // deliberately keeps both DLLs loaded until process exit; unloading them
+    // while SDK callbacks or function pointers may still exist would be unsafe.
     unsafe impl Send for Module {}
     unsafe impl Sync for Module {}
-
-    impl Drop for Module {
-        fn drop(&mut self) {
-            // SAFETY: this handle was returned by LoadLibraryW and is owned here.
-            let _ = unsafe { FreeLibrary(self.0) };
-        }
-    }
 
     pub struct FsrRuntime {
         _loader: Module,
