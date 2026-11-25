@@ -46,16 +46,60 @@ pub fn run(exe: &Path, args: &[String]) -> Result<()> {
         command.arg("-force-d3d12");
     }
 
-    let child = command
+    let mut child = command
         .env("AETHERX_FRAME_GENERATION", "2x")
         .current_dir(directory)
         .spawn()
         .with_context(|| format!("starting native PC game {}", exe.display()))?;
 
+    let game_pid = child.id();
     println!("launched       {}", exe.display());
     println!("working dir    {}", directory.display());
-    println!("process id     {}", child.id());
+    println!("process id     {game_pid}");
     println!("mode           native Windows/host process (no console emulation)");
-    println!("frame gen      2x requested (rendering backend integration required)");
+
+    // PhyriadFG captures the game's final window from outside the process,
+    // so it does not need game-engine hooks, Steam, or account access.
+    // Install tools/setup-phyriadfg.ps1 places the pinned backend beside AetherX.
+    let fg_path = std::env::current_exe()?
+        .parent()
+        .context("AetherX executable has no parent directory")?
+        .join("phyriad_fg.exe");
+    let mut framegen = if fg_path.is_file() {
+        match Command::new(&fg_path)
+            .args([
+                "--window-pid",
+                &game_pid.to_string(),
+                "--fg-factor",
+                "2",
+                "--force-single-gpu",
+            ])
+            .spawn()
+        {
+            Ok(process) => {
+                println!("frame gen      PhyriadFG started (2x, PID {game_pid})");
+                Some(process)
+            }
+            Err(error) => {
+                eprintln!("frame gen      could not start PhyriadFG: {error}");
+                None
+            }
+        }
+    } else {
+        eprintln!(
+            "frame gen      backend not installed; run tools\\setup-phyriadfg.ps1"
+        );
+        None
+    };
+
+    // Keep the capture/presenter alive exactly as long as the game. Closing
+    // the game also terminates the external frame-generation process.
+    std::thread::spawn(move || {
+        let _ = child.wait();
+        if let Some(process) = framegen.as_mut() {
+            let _ = process.kill();
+            let _ = process.wait();
+        }
+    });
     Ok(())
 }
