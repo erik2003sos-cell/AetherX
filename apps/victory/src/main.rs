@@ -6,6 +6,7 @@
 mod census;
 mod inspect;
 mod launch;
+mod library;
 mod prebuild;
 mod run;
 mod shader;
@@ -128,6 +129,11 @@ enum Command {
         #[arg(last = true)]
         game_args: Vec<String>,
     },
+    /// Scan common game folders and interactively launch a native PC game.
+    Library {
+        /// Game install folders to scan. Defaults to common Steam and Games folders.
+        paths: Vec<PathBuf>,
+    },
     /// Show the resolved configuration and check it.
     Config,
 }
@@ -201,6 +207,7 @@ fn main() -> Result<()> {
             Ok(())
         }
         Command::Launch { exe, game_args } => launch::run(&exe, &game_args),
+        Command::Library { paths } => library::run(paths),
         Command::Config => show_config(),
     }
 }
