@@ -140,6 +140,24 @@ target\release\victory.exe launch "C:\Games\Example Game\Game.exe" -- -windowed
 The launcher uses the game's install folder as its working directory and
 starts it without going through a command shell.
 
+### Game library menu
+
+Scan the standard Steam and local Games folders, choose an executable by
+number, and launch it without typing its full path:
+
+```powershell
+target\\release\\victory.exe library
+```
+
+You can also scan specific install folders:
+
+```powershell
+target\\release\\victory.exe library "C:\\Games" "D:\\Games"
+```
+
+The first version is a terminal-based picker. It starts native Windows games;
+it does not emulate a console or modify a game's renderer.
+
 ## Commands
 
 ```
