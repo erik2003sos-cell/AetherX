@@ -2,11 +2,12 @@
 // Initial prototype: block-matching optical flow + 2x midpoint synthesis.
 // No vendor SDK, AI model, depth buffer, or motion-vector input is required.
 // The host must bind linear/single-sample color textures and dispatch these
-// kernels in order. Flow is stored at full resolution in pixel units.
+// kernels in order. Flow is stored on a configurable coarse grid in pixel units.
 
 Texture2D<float4> PreviousFrame : register(t0);
 Texture2D<float4> CurrentFrame  : register(t1);
 Texture2D<float2> FlowField     : register(t2);
+SamplerState LinearClamp       : register(s0);
 RWTexture2D<float2> OutFlow     : register(u0);
 RWTexture2D<float4> OutFrame    : register(u1);
 
@@ -111,5 +112,3 @@ void SynthesizeMidpoint(uint3 tid : SV_DispatchThreadID)
     float4 oldColor = PreviousFrame.SampleLevel(LinearClamp, oldUv, 0);
     OutFrame[p] = lerp(oldColor, nowColor, saturate(BlendFactor)) * float4(ExposureScale, ExposureScale, ExposureScale, 1.0);
 }
-
-SamplerState LinearClamp : register(s0);
