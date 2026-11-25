@@ -112,8 +112,10 @@ void SynthesizeMidpoint(uint3 tid : SV_DispatchThreadID)
     int2 p = int2(tid.xy);
     if (!Inside(p)) return;
 
-    int2 flowPixel = min(p / (int)FlowScale, int2(FlowSize) - 1);
-    float2 motion = FlowField.Load(int3(flowPixel, 0));
+    // Bilinear interpolation avoids the visible block boundaries caused
+    // by nearest-cell flow lookup on the coarse estimation grid.
+    float2 flowUv = (float2(p) + 0.5) / float2(ImageSize);
+    float2 motion = FlowField.SampleLevel(LinearClamp, flowUv, 0);
     float2 halfMotion = motion * 0.5;
 
     float2 nowUv = (float2(p) + 0.5 - halfMotion) / float2(ImageSize);
