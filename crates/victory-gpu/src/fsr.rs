@@ -1,9 +1,10 @@
 //! AMD FidelityFX Frame Generation SDK runtime discovery.
 //!
-//! AMD ships the DX12 frame-generation provider as one signed DLL. The SDK's
-//! ffx_api_loader.h resolves the five API entry points from that module.
-//! Finding those entry points is only runtime availability; a game swapchain
-//! still needs to be wrapped and supplied with an interpolation dispatch.
+//! The SDK ships a loader DLL and a separate DX12 frame-generation provider.
+//! The five public API entry points are resolved from the loader; loading the
+//! provider makes its DX12 implementation available to that loader.
+//! Detection is not activation: a game swapchain and per-frame dispatch are
+//! still required before any generated frame can be presented.
 
 #[cfg(windows)]
 mod windows_runtime {
@@ -13,7 +14,8 @@ mod windows_runtime {
     use windows::Win32::System::LibraryLoader::{FreeLibrary, GetProcAddress, LoadLibraryW};
     use windows::core::{PCSTR, PCWSTR};
 
-    const PROVIDER_DLL: &str = "amd_fidelityfx_framegeneration_dx12.dll";
+    const LOADER_DLL: &str = "amd_fidelityfx_loader_dx12.dll";
+    const FRAMEGEN_DLL: &str = "amd_fidelityfx_framegeneration_dx12.dll";
     const REQUIRED_EXPORTS: [&[u8]; 5] = [
         b"ffxCreateContext\0",
         b"ffxDestroyContext\0",
@@ -24,8 +26,8 @@ mod windows_runtime {
 
     struct Module(windows::Win32::Foundation::HMODULE);
 
-    // The module handle is immutable after LoadLibraryW; the cached runtime
-    // is process-wide and the SDK entry points are safe to resolve concurrently.
+    // The handles are immutable after LoadLibraryW. The cached runtime keeps
+    // both modules loaded until process shutdown while entry points are used.
     unsafe impl Send for Module {}
     unsafe impl Sync for Module {}
 
@@ -37,7 +39,8 @@ mod windows_runtime {
     }
 
     pub struct FsrRuntime {
-        _provider: Module,
+        _loader: Module,
+        _framegen: Module,
         pub directory: PathBuf,
     }
 
@@ -48,24 +51,33 @@ mod windows_runtime {
             let directory = exe.parent()
                 .ok_or_else(|| "AetherX executable has no parent directory".to_owned())?
                 .to_path_buf();
-            let provider_path = directory.join(PROVIDER_DLL);
-            if !provider_path.is_file() {
-                return Err(format!("missing {PROVIDER_DLL} beside AetherX"));
+
+            let loader_path = directory.join(LOADER_DLL);
+            let framegen_path = directory.join(FRAMEGEN_DLL);
+            if !loader_path.is_file() {
+                return Err(format!("missing {LOADER_DLL} beside AetherX"));
+            }
+            if !framegen_path.is_file() {
+                return Err(format!("missing {FRAMEGEN_DLL} beside AetherX"));
             }
 
-            let provider = load_absolute(&provider_path)?;
+            // Load provider before resolving the loader API so provider
+            // discovery has already happened when the first FFX call is made.
+            let framegen = load_absolute(&framegen_path)?;
+            let loader = load_absolute(&loader_path)?;
             for export in REQUIRED_EXPORTS {
                 // SAFETY: export names are NUL-terminated static byte strings;
-                // the loaded provider remains alive in FsrRuntime.
-                let found = unsafe { GetProcAddress(provider.0, PCSTR(export.as_ptr())) };
+                // the loader remains alive in FsrRuntime.
+                let found = unsafe { GetProcAddress(loader.0, PCSTR(export.as_ptr())) };
                 if found.is_none() {
                     return Err(format!(
-                        "FSR provider is missing export {}",
+                        "FSR loader is missing export {}",
                         String::from_utf8_lossy(&export[..export.len() - 1])
                     ));
                 }
             }
-            Ok(Self { _provider: provider, directory })
+
+            Ok(Self { _loader: loader, _framegen: framegen, directory })
         }
     }
 
@@ -85,11 +97,11 @@ pub fn status() -> &'static str {
     match RUNTIME.get_or_init(windows_runtime::FsrRuntime::load) {
         Ok(runtime) => {
             let _ = &runtime.directory;
-            "FSR DX12 provider detected — swapchain/dispatch integration pending"
+            "FSR DX12 loader + provider detected — swapchain/dispatch integration pending"
         }
         Err(reason) => {
             let _ = reason;
-            "FSR DX12 provider not installed — safe fallback"
+            "FSR DX12 loader/provider not installed — safe fallback"
         }
     }
 }
