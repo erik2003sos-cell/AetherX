@@ -119,12 +119,16 @@ fn start_framegen_when_window_exists(
             game_pid_arg.as_str(),
             "--fg-factor",
             "2",
-            // Fractional output controller: 45 FPS is ~1.5x for a 30 FPS source.
-            // --no-decimate selects its fractional content quantizer instead of
-            // snapping to an exact divisor of the monitor refresh rate.
+            // Aim for ~1.5x output from a 30 FPS source. On this 240 Hz display,
+            // PhyriadFG's low-cost tick decimator snaps 45 to the nearest exact
+            // refresh divisor: 48 FPS (240 / 5), i.e. ~1.6x at 30 source FPS.
+            // Do NOT pass --no-decimate: that legacy fractional quantizer still
+            // runs warp/present work at panel rate and wastes GPU time.
             "--target-output-fps",
             "45",
-            "--no-decimate",
+            // Smooth pair-seam velocity without changing motion vectors; this
+            // is the backend's text-safe cadence option.
+            "--cphase",
         ]);
         if let Some(log) = framegen_log_file(game_pid) {
             if let Ok(stderr) = log.try_clone() {
@@ -155,7 +159,7 @@ fn start_framegen_when_window_exists(
                     break;
                 }
                 Ok(None) if Instant::now() >= startup_deadline => {
-                    println!("frame gen      PhyriadFG initialized (45 FPS target, ~1.5x at 30 source FPS, game PID {game_pid})");
+                    println!("frame gen      PhyriadFG initialized (45 FPS request; ~48 FPS on 240 Hz, ~1.6x at 30 source FPS; game PID {game_pid})");
                     return Some(process);
                 }
                 Ok(None) => std::thread::sleep(Duration::from_millis(200)),
