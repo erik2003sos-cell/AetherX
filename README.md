@@ -176,6 +176,20 @@ victory config
 Logging: `VICTORY_LOG=victory_loader=trace,info` (a release build logs
 info and above).
 
+### AetherX desktop app (Windows)
+
+Build the separate graphical launcher:
+
+```powershell
+cargo build --release -p victory --bin aetherx
+.\\target\\release\\aetherx.exe
+```
+
+This creates `target\\release\\aetherx.exe`. It scans the default Steam
+and game folders, lets you select an installed executable, and starts it as
+a native Windows process. The desktop launcher is a library and launch UI;
+it does not emulate Xbox games or promise an FPS increase.
+
 ### Windows shader-test validator
 
 The shader tests use `dxil.dll` to validate Shader Model 6.6 containers.
