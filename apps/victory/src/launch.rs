@@ -65,11 +65,12 @@ pub fn run(exe: &Path, args: &[String]) -> Result<()> {
         .parent()
         .context("AetherX executable has no parent directory")?
         .join("phyriad_fg.exe");
+    let game_pid_arg = game_pid.to_string();
     let mut framegen = if fg_path.is_file() {
         match Command::new(&fg_path)
             .args([
                 "--window-pid",
-                &game_pid.to_string(),
+                game_pid_arg.as_str(),
                 "--fg-factor",
                 "2",
                 "--force-single-gpu",
