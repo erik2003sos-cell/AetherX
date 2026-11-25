@@ -11,6 +11,7 @@ $dest = Join-Path $root "target\release\phyriad_fg.exe"
 New-Item -ItemType Directory -Force -Path (Split-Path $dest) | Out-Null
 $temp = Join-Path $env:TEMP "aetherx-phyriad_fg.exe"
 
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 Write-Host "Downloading PhyriadFG $version..."
 Invoke-WebRequest -Uri $url -OutFile $temp -UseBasicParsing
 $actualSha256 = (Get-FileHash -Path $temp -Algorithm SHA256).Hash.ToLowerInvariant()
