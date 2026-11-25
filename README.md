@@ -120,6 +120,44 @@ title's window has focus:
 | F / H | stick clicks |
 | Esc, Tab | Menu, View |
 
+## Launching ordinary PC games
+
+VIctory can also start a normal Windows game executable as a host process.
+This is a launcher path, not console emulation: the game runs with its own
+native Windows renderer, input and audio. It does not make Xbox-only game
+files runnable on PC or add performance to the game.
+
+```powershell
+target\release\victory.exe launch "C:\Games\Example Game\Game.exe"
+```
+
+Pass game arguments after `--`:
+
+```powershell
+target\release\victory.exe launch "C:\Games\Example Game\Game.exe" -- -windowed
+```
+
+The launcher uses the game's install folder as its working directory and
+starts it without going through a command shell.
+
+### Game library menu
+
+Scan the standard Steam and local Games folders, choose an executable by
+number, and launch it without typing its full path:
+
+```powershell
+target\\release\\victory.exe library
+```
+
+You can also scan specific install folders:
+
+```powershell
+target\\release\\victory.exe library "C:\\Games" "D:\\Games"
+```
+
+The first version is a terminal-based picker. It starts native Windows games;
+it does not emulate a console or modify a game's renderer.
+
 ## Commands
 
 ```
@@ -131,11 +169,26 @@ victory translate [paths...] [--validate] [--pipelines] [--list] [--jobs N]
 victory translate [paths...] --cache [--pipelines] [--jobs N]
 victory run <exe> [--execute] [--unimplemented trap|zero] [--strict]
             [--console series-x|series-s] [-- <title arguments>]
+victory launch <exe> [-- <game arguments>]
 victory config
 ```
 
 Logging: `VICTORY_LOG=victory_loader=trace,info` (a release build logs
 info and above).
+
+### AetherX desktop app (Windows)
+
+Build the separate graphical launcher:
+
+```powershell
+cargo build --release -p victory --bin aetherx
+.\\target\\release\\aetherx.exe
+```
+
+This creates `target\\release\\aetherx.exe`. It scans the default Steam
+and game folders, lets you select an installed executable, and starts it as
+a native Windows process. The desktop launcher is a library and launch UI;
+it does not emulate Xbox games or promise an FPS increase.
 
 ### Windows shader-test validator
 
