@@ -73,7 +73,6 @@ pub fn run(exe: &Path, args: &[String]) -> Result<()> {
                 game_pid_arg.as_str(),
                 "--fg-factor",
                 "2",
-                "--force-single-gpu",
             ])
             .spawn()
         {
