@@ -5,7 +5,7 @@ mod launch;
 #[path = "../library.rs"]
 mod library;
 
-use std::{fs, path::PathBuf};
+use std::{fs, path::PathBuf, process::Command};
 
 #[derive(Clone, Copy, PartialEq)]
 enum Upscaler { DlssQuality, DlssBalanced, DlssPerformance, Native }
@@ -78,6 +78,20 @@ impl AetherXApp {
             Err(error) => self.status = format!("Could not start game: {error:#}"),
         }
     }
+    fn launch_benchmark(&mut self) {
+        let executable = match std::env::current_exe() {
+            Ok(path) => path.with_file_name("aetherx_benchmark.exe"),
+            Err(error) => { self.status = format!("Could not locate AetherX executable: {error}"); return; }
+        };
+        if !executable.is_file() {
+            self.status = format!("Benchmark executable not found: {}. Build with cargo build --release -p victory --bin aetherx_benchmark", executable.display());
+            return;
+        }
+        match Command::new(&executable).arg("--launched-by-aetherx").spawn() {
+            Ok(child) => self.status = format!("AetherX benchmark started (PID {})", child.id()),
+            Err(error) => self.status = format!("Could not launch benchmark: {error}"),
+        }
+    }
     fn save_graphics(&mut self) {
         self.status = match self.graphics.save() {
             Ok(path) => format!("GTA 6 profile saved: {}", path.display()),
@@ -94,6 +108,7 @@ impl eframe::App for AetherXApp {
             ui.add_space(8.0);
             ui.horizontal(|ui| {
                 if ui.button("↻ Refresh library").clicked() { self.refresh(); }
+                if ui.button("🚦 Run GTA-style benchmark").clicked() { self.launch_benchmark(); }
                 if ui.add_enabled(self.selected.is_some(), egui::Button::new("▶ PLAY")).clicked() { self.play_selected(); }
             });
             ui.separator();
