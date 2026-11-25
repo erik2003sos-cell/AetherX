@@ -39,6 +39,8 @@ mod indirect;
 pub mod list;
 #[cfg(windows)]
 mod memory;
+#[cfg(all(test, windows))]
+mod motionflow_tests;
 pub mod object;
 pub mod pipeline;
 #[cfg(windows)]
