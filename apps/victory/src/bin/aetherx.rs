@@ -89,7 +89,7 @@ impl eframe::App for AetherXApp {
 
             ui.separator();
             ui.heading("Performance");
-            ui.label("2× Frame Generation: PhyriadFG external backend");
+            ui.label("1.5× target Frame Generation: 45 FPS at a 30 FPS source (PhyriadFG)");
             #[cfg(windows)]
             {
                 let backend_installed = std::env::current_exe()
@@ -102,7 +102,7 @@ impl eframe::App for AetherXApp {
                     "PhyriadFG backend: not installed — run tools\\setup-phyriadfg.ps1"
                 });
             }
-            ui.small("Install the pinned backend with tools\\setup-phyriadfg.ps1. AetherX then starts it alongside the game and targets the game process automatically. Actual output FPS must be verified on this PC.");
+            ui.small("AetherX uses PhyriadFG’s fractional output controller: 45 FPS target, approximately 1.5× at 30 source FPS. Actual output depends on source FPS and GPU capacity; the controller lowers the target if the GPU cannot sustain it.");
             ui.add_space(8.0);
             ui.label(&self.status);
             ui.add_space(4.0);
