@@ -13,12 +13,15 @@ RWTexture2D<float4> OutFrame    : register(u1);
 cbuffer MotionFlowParams : register(b0)
 {
     uint2 ImageSize;
+    uint2 FlowSize;
     uint SearchRadius;
     uint PatchRadius;
+    uint FlowScale;
     float BlendFactor;
     float ExposureScale;
-    uint2 Padding;
+    uint Padding;
 };
+
 
 float Luma(float3 c)
 {
@@ -36,12 +39,13 @@ bool Inside(int2 p)
 [numthreads(8, 8, 1)]
 void EstimateFlow(uint3 tid : SV_DispatchThreadID)
 {
-    int2 p = int2(tid.xy);
-    if (!Inside(p)) return;
+    int2 flowPixel = int2(tid.xy);
+    if (any(flowPixel >= int2(FlowSize))) return;
 
+    // Estimate on a quarter-resolution grid to keep the search practical.
+    int2 p = min(flowPixel * (int)FlowScale + int(FlowScale / 2), int2(ImageSize) - 1);
     float bestCost = 1.0e20;
     int2 bestMotion = int2(0, 0);
-    float centerNow = Luma(CurrentFrame.Load(int3(p, 0)).rgb);
 
     [loop]
     for (int y = -(int)SearchRadius; y <= (int)SearchRadius; ++y)
@@ -49,7 +53,7 @@ void EstimateFlow(uint3 tid : SV_DispatchThreadID)
         [loop]
         for (int x = -(int)SearchRadius; x <= (int)SearchRadius; ++x)
         {
-            int2 motion = int2(x, y);
+            int2 motion = int2(x, y) * (int)FlowScale;
             float cost = 0.0;
             uint samples = 0;
 
@@ -59,7 +63,7 @@ void EstimateFlow(uint3 tid : SV_DispatchThreadID)
                 [loop]
                 for (int px = -(int)PatchRadius; px <= (int)PatchRadius; ++px)
                 {
-                    int2 q = p + int2(px, py);
+                    int2 q = p + int2(px, py) * (int)FlowScale;
                     int2 oldQ = q - motion;
                     if (!Inside(q) || !Inside(oldQ)) continue;
 
@@ -84,7 +88,7 @@ void EstimateFlow(uint3 tid : SV_DispatchThreadID)
 
     // Reject ambiguous/flat matches rather than inventing large motion.
     float confidence = saturate(1.0 - bestCost * 8.0);
-    OutFlow[p] = float2(bestMotion) * confidence;
+    OutFlow[flowPixel] = float2(bestMotion) * confidence;
 }
 
 // Synthesize the temporal midpoint. Flow points from the previous frame
@@ -96,7 +100,8 @@ void SynthesizeMidpoint(uint3 tid : SV_DispatchThreadID)
     int2 p = int2(tid.xy);
     if (!Inside(p)) return;
 
-    float2 motion = FlowField.Load(int3(p, 0));
+    int2 flowPixel = min(p / (int)FlowScale, int2(FlowSize) - 1);
+    float2 motion = FlowField.Load(int3(flowPixel, 0));
     float2 halfMotion = motion * 0.5;
 
     float2 nowUv = (float2(p) + 0.5 - halfMotion) / float2(ImageSize);
